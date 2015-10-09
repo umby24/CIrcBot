@@ -1,0 +1,13 @@
+CIrcBot
+=======
+An IRC Bot written in C++, a project im using to learn C++.
+
+Building
+--------
+To build, you will need to place libws2_32.a in the source directory. (Not included incase of licensing issues)
+
+I use the CLion IDE, which uses CMake. 
+
+To compile on Windows, if you're using CMake, it should just build and work.
+
+If you're not, you will need to add a linker library for libws2_32.a
