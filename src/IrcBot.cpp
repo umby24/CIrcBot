@@ -8,7 +8,7 @@
 using namespace std;
 
 IrcBot::IrcBot(string ip, string port, string nick, string ident, string realname) {
-    Socket = new Sockets(ip, port); // -- Create a new socket
+    Socket = std::unique_ptr<Sockets>(new Sockets(ip, port)); // -- Create a new socket
 
     Ip = ip; // -- Assign all of our internal values..
     Port = port;
@@ -117,17 +117,53 @@ void IrcBot::ParseMessage(string rawMessage) {
         return;
     }
 
-    if (command == "NOTICE") {
-        string message = join(args);
-        cout << prefix << ">> " << message << endl;
-        return;
+    if (command == "307") { // -- Authed message
+
+    }
+    if (command == "330") { // -- Authed message
+
+    }
+    if (command == "332") { // -- Topic Updated
+        cout << " === TOPIC UPDATE" << endl;
+    }
+    if (command == "353") { // -- Nick list
+
     }
 
     if (command == "376") {
         SendRaw("JOIN #test");
-        SendRaw("PRIVMSG #test :I am a test C++ bot!");
         cout << "=== Joined Channel" << endl;
         return;
+    }
+    if (command == "433") { // -- Username in use..
+
+
+    }
+
+    if (command == "NOTICE") {
+        string message = join(args);
+        cout << prefix << " >> " << message << endl;
+        return;
+    }
+
+    if (command == "NICK") {
+
+    }
+
+    if (command == "PART") {
+
+    }
+
+    if (command == "QUIT") {
+
+    }
+
+    if (command == "TOPIC") {
+
+    }
+
+    if (command == "JOIN") {
+
     }
 
     if (command == "PRIVMSG") {
@@ -137,9 +173,27 @@ void IrcBot::ParseMessage(string rawMessage) {
         string name = prefix.substr(0, prefix.find("!"));
         message = message.substr(1, message.length() - 1);
 
+        if (message.substr(0, 1) == "\1") {
+            // CTCP
+            if (message.length() >= 8 && message.substr(0, 8) == "\1VERSION") {
+                cout << "=== CTCP VERSION RECEIVED ===" << endl;
+                SendRaw("NOTICE " + name + " :\1VERSION Umby24 C++ IRC Bot #!#!#!#!\1");
+                return;
+            }
+
+            if (message.length() >= 5 && message.substr(0, 5) == "\1PING") {
+                cout << "=== CTCP PING RECEIVED ===" << endl;
+                //SendRaw("NOTICE " + name + " :\1VERSION Umby24 C++ IRC Bot #!#!#!#!");
+                return;
+            }
+            cout << "CTCP..." << endl;
+        }
+
         cout << "[" << channel << "] <" << name << "> " << message << endl;
         return;
     }
+
+    cout << rawMessage << endl;
 }
 
 string IrcBot::CurrentMessage() {

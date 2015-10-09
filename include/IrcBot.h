@@ -8,6 +8,7 @@
 #include <vector>
 #include <iterator>
 #include <sstream>
+#include <memory>
 
 #ifdef __linux__
 #include "LinuxSockets.h"
@@ -25,7 +26,7 @@ public:
     void ParseLoop();
     void SendRaw(std::string message);
 private:
-    Sockets *Socket;
+    std::unique_ptr<Sockets> Socket;
     std::string InputBuffer;
     std::string Ip;
     std::string Port;
