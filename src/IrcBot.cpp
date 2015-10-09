@@ -5,45 +5,46 @@
 #include <sstream>
 #include "../include/IrcBot.h"
 
-IrcBot::IrcBot(std::string ip, std::string port, std::string nick, std::string ident, std::string realname) {
-    Socket = new Sockets(ip, port);
+using namespace std;
 
-    Ip = ip;
+IrcBot::IrcBot(string ip, string port, string nick, string ident, string realname) {
+    Socket = new Sockets(ip, port); // -- Create a new socket
+
+    Ip = ip; // -- Assign all of our internal values..
     Port = port;
     Nickname = nick;
     RealName = realname;
     Identification = ident;
     Connected = false;
+    InputBuffer = "";
 }
 
-std::vector<std::string> split(const std::string &s, char delim) {
-    std::stringstream ss(s);
-    std::string item;
-    std::vector<std::string> elems;
+vector<string> split(const string &s, char delim) {
+    stringstream ss(s);
+    string item;
+    vector<string> elems;
 
-    while (std::getline(ss, item, delim)) {
+    while (getline(ss, item, delim)) {
         elems.push_back(item);
     }
 
     return elems;
 }
 
-std::string join(std::vector<std::string> input) {
-    std::ostringstream joined;
-    std::copy(input.begin(), input.end(), std::ostream_iterator<std::string>(joined, " "));
+string join(vector<string> input) {
+    ostringstream joined;
+    copy(input.begin(), input.end(), ostream_iterator<string>(joined, " "));
     return joined.str();
 }
 
 bool IrcBot::Connect() {
-    std::cout << "irc connect" << std::endl;
-
-    if (Connected)
+    if (Connected) // -- If we're already connected, ignore.
         return false;
 
     bool connectResult;
-    connectResult = Socket->Connect();
+    connectResult = Socket->Connect(); // -- Try to connect to the irc server.
 
-    if (!connectResult) {
+    if (!connectResult) { // -- Connection failed.
         Connected = false;
         return false;
     }
@@ -53,11 +54,11 @@ bool IrcBot::Connect() {
     SendRaw("NICK " + Nickname);
     SendRaw("USER " + Identification + " CBOT CBOT :" + RealName);
     SendRaw("MODE " + Nickname + " +B-x");
-    std::cout << "Connected." << std::endl;
+    cout << "Connected." << endl;
     return true;
 }
 
-void IrcBot::SendRaw(std::string message) {
+void IrcBot::SendRaw(string message) {
     message = message + "\r\n"; // -- Add IRC Ending
     char *msg = (char*) message.c_str(); // -- Convert to char*
 
@@ -67,99 +68,100 @@ void IrcBot::SendRaw(std::string message) {
     Socket->Send(msg, len); // -- Send :)
 }
 
-std::string IrcBot::ReadMessage() {
-    std::string ircString("");
-    int readBytes;
-    char buffer;
+void IrcBot::ReadMessage() { // -- Read a message from IRC.
+    if (!Connected)
+        return;
 
-    do {
-        readBytes = Socket->Read(&buffer, 1);
+    //string ircString(""); // -- The output string
+    int readBytes; // -- Number of bytes the socket has read.
+    char buffer[512]; // -- The input buffer. (Maximum irc packet size is 512 bytes)
 
-        if (readBytes == -1) {
-            Connected = false; // -- Read error occured.
-            return ircString;
-        }
+    readBytes = Socket->Read(&buffer, 512); // -- Read one byte.
 
-        ircString.append(std::string(1, buffer).c_str());
-
-        if ((ircString.length() > 2 && std::string(ircString.end()-2, ircString.end()) == "\r\n"))
-            break;
-    } while(readBytes);
-
-    /*
-    while (ircLast != "\r\n") {
-        readBytes = Socket.Read(buffer, 1);
-
-        if (readBytes == -1) {
-            Connected = false; // -- Read error occured.
-            return ircString;
-        }
-        ircString.append(buffer); //ircString = ircString + buffer;
-        ircLast = std::string(ircString.end()-2, ircString.end());
-        //ircLast = ircLast.substr(1, 1) + buffer;
-        free(buffer);
-        buffer = new char[1];
+    if (readBytes == -1) {
+        Connected = false; // -- Read error occured.
+        return;
     }
-     */
 
-    //free(buffer);
-    return  ircString;
+    InputBuffer.append(string(buffer, (unsigned long) readBytes).c_str()); // -- Add the byte to the end of our string.
+}
+
+void IrcBot::ParseMessage(string rawMessage) {
+    string prefix;
+    string command;
+    vector<string> args;
+
+    if (rawMessage.substr(0 ,1) == ":") {
+        prefix = rawMessage.substr(1, rawMessage.find(' ', 0) - 1);
+        int inx = (int) rawMessage.find(" ");
+        args = split(rawMessage.substr((unsigned int) (inx + 1), rawMessage.length() - (inx - 1)), ' ');
+        command = args[0];
+        args.erase(args.begin());
+    } else {
+        command = rawMessage.substr(0, rawMessage.find(' ', 0));
+        int inx = (int) rawMessage.find(" ");
+        args = split(rawMessage.substr((unsigned int) (inx + 1), rawMessage.length() - (inx - 1)), ' ');
+    }
+
+    if (command == "PING") {
+        SendRaw("PONG " + args[0]);
+        return;
+    }
+
+    // 451: Have not registered.
+    if (command == "451") {
+        SendRaw("NICK " + Nickname);
+        SendRaw("USER " + Identification + " CBOT CBOT :" + RealName);
+        SendRaw("MODE " + Nickname + " +B-x");
+        cout << "=== Registered" << endl;
+        return;
+    }
+
+    if (command == "NOTICE") {
+        string message = join(args);
+        cout << prefix << ">> " << message << endl;
+        return;
+    }
+
+    if (command == "376") {
+        SendRaw("JOIN #test");
+        SendRaw("PRIVMSG #test :I am a test C++ bot!");
+        cout << "=== Joined Channel" << endl;
+        return;
+    }
+
+    if (command == "PRIVMSG") {
+        string channel = args[0];
+        args.erase(args.begin());
+        string message = join(args);
+        string name = prefix.substr(0, prefix.find("!"));
+        message = message.substr(1, message.length() - 1);
+
+        cout << "[" << channel << "] <" << name << "> " << message << endl;
+        return;
+    }
+}
+
+string IrcBot::CurrentMessage() {
+    unsigned long endIndex = InputBuffer.find("\r\n");
+
+    if (((long)endIndex) == -1)
+        return "";
+
+    string message = InputBuffer.substr(0, endIndex);
+    InputBuffer = InputBuffer.substr(endIndex + 2, InputBuffer.length() - (endIndex + 2));
+
+    return message;
 }
 
 void IrcBot::ParseLoop() {
     while (Connected) {
-        std::string rawMessage;
-        std::string prefix;
-        std::string command;
-        std::vector<std::string> args;
+        ReadMessage();
+        string toParse = CurrentMessage();
 
-        rawMessage = ReadMessage();
-
-        if (rawMessage.substr(0 ,1) == ":") {
-            prefix = rawMessage.substr(1, rawMessage.find(' ', 0) - 1);
-            int inx = rawMessage.find(" ");
-            args = split(rawMessage.substr((unsigned int) (inx + 1), rawMessage.length() - (inx - 1)), ' ');
-            command = args[0];
-            args.erase(args.begin());
-        } else {
-            command = rawMessage.substr(0, rawMessage.find(' ', 0));
-            int inx = rawMessage.find(" ");
-            args = split(rawMessage.substr((unsigned int) (inx + 1), rawMessage.length() - (inx - 1)), ' ');
-            std::cout << command << std::endl;
+        while (toParse != "") {
+            ParseMessage(toParse);
+            toParse = CurrentMessage();
         }
-
-        if (command == "PING") {
-            SendRaw("PONG " + args[0]);
-            continue;
-        }
-
-        std::cout << "Command: " << command << std::endl;
-
-        // 451: Have not registered.
-        if (command == "451") {
-            SendRaw("NICK " + Nickname);
-            SendRaw("USER " + Identification + " CBOT CBOT :" + RealName);
-            SendRaw("MODE " + Nickname + " +B-x");
-            std::cout << "Registered" << std::endl;
-            continue;
-        }
-
-        if (command == "NOTICE") {
-            std::string message = join(args);
-            std::cout << prefix << ">> " << message << std::endl;
-            continue;
-        }
-
-        if (command == "376") {
-            SendRaw("JOIN #test");
-            SendRaw("PRIVMSG #test :I am a test C++ bot!");
-            continue;
-        }
-
-        std::cout << "RAW: " << rawMessage << std::endl;
-        //std::cout << "Args:";
-        //for(std::vector<std::string>::iterator it = args.begin(); it != args.end(); ++it) {
-        //     std::cout << *it << std::endl;
-        //}
     }
 }

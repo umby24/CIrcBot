@@ -26,6 +26,7 @@ public:
     void SendRaw(std::string message);
 private:
     Sockets *Socket;
+    std::string InputBuffer;
     std::string Ip;
     std::string Port;
     bool Connected;
@@ -34,7 +35,11 @@ private:
     std::string RealName;
 
 
-    std::string ReadMessage();
+    void ReadMessage();
+
+    std::string CurrentMessage();
+
+    void ParseMessage(std::string rawMessage);
 };
 
 
